@@ -1,0 +1,1581 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D 线框迷宫</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: #f5f5dc;
+            color: #5d4037;
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+            user-select: none;
+        }
+        #gameCanvas {
+            display: block;
+            cursor: none;
+        }
+        #ui {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        #menu {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            pointer-events: auto;
+            background: rgba(250, 240, 230, 0.95);
+            padding: 40px;
+            border: 2px solid #8b4513;
+            box-shadow: 0 0 20px rgba(139, 69, 19, 0.3);
+        }
+        #menu h1 {
+            font-size: 48px;
+            margin-bottom: 30px;
+            color: #5d4037;
+            text-shadow: 0 0 10px rgba(139, 69, 19, 0.3);
+        }
+        .level-btn {
+            display: inline-block;
+            margin: 10px;
+            padding: 15px 30px;
+            font-size: 20px;
+            background: #faf0e6;
+            color: #5d4037;
+            border: 2px solid #8b4513;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            transition: all 0.3s;
+        }
+        .level-btn:hover {
+            background: #8b4513;
+            color: #f5f5dc;
+            box-shadow: 0 0 15px rgba(139, 69, 19, 0.4);
+        }
+        #hud {
+            position: absolute;
+            top: 20px;
+            left: 160px;
+            font-size: 18px;
+            color: #5d4037;
+            text-shadow: 0 0 5px rgba(139, 69, 19, 0.3);
+            display: none;
+        }
+        #winMessage {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 48px;
+            text-align: center;
+            color: #5d4037;
+            text-shadow: 0 0 20px rgba(139, 69, 19, 0.3);
+            display: none;
+            background: rgba(250, 240, 230, 0.95);
+            padding: 40px;
+            border: 2px solid #8b4513;
+            pointer-events: auto;
+        }
+        #instructions {
+            margin-top: 30px;
+            font-size: 14px;
+            color: #8b7355;
+            line-height: 1.8;
+        }
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 20px;
+            height: 20px;
+            transform: translate(-50%, -50%);
+            display: none;
+        }
+        #crosshair::before, #crosshair::after {
+            content: '';
+            position: absolute;
+            background: #8b4513;
+        }
+        #crosshair::before {
+            width: 20px;
+            height: 2px;
+            top: 9px;
+            left: 0;
+        }
+        #crosshair::after {
+            width: 2px;
+            height: 20px;
+            top: 0;
+            left: 9px;
+        }
+        /* 小地图样式 */
+        #minimapContainer {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 120px;
+            height: 120px;
+            background: transparent;
+            display: none;
+            pointer-events: none;
+            overflow: hidden;
+        }
+        #minimapCanvas {
+            width: 100%;
+            height: 100%;
+        }
+        #exportBtn {
+            margin-top: 15px;
+            font-size: 14px;
+            padding: 8px 16px;
+        }
+        /* 关卡网格样式 */
+        #levelSelect {
+            max-width: 400px;
+            margin: 0 auto;
+        }
+        .level-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+        .level-grid-btn {
+            padding: 20px 5px 10px;
+            font-size: 32px;
+            font-weight: bold;
+            background: transparent;
+            color: #8b4513;
+            border: 1px solid rgba(139, 69, 19, 0.3);
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            transition: all 0.2s;
+            border-radius: 0;
+            line-height: 1;
+        }
+        .level-grid-btn:hover {
+            background: rgba(139, 69, 19, 0.1);
+            border-color: #8b4513;
+        }
+        .level-grid-btn.completed {
+            background: rgba(241, 144, 140, 0.15);
+            border-color: rgba(241, 144, 140, 0.6);
+            color: rgb(200, 100, 100);
+        }
+        .level-grid-btn.current {
+            background: rgba(139, 69, 19, 0.15);
+            border-color: #8b4513;
+        }
+        .level-size {
+            font-size: 10px;
+            color: #8b7355;
+            font-weight: normal;
+            margin-top: 6px;
+            letter-spacing: 0.5px;
+        }
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            margin-top: 15px;
+        }
+        .page-btn {
+            padding: 6px 16px;
+            font-size: 12px;
+            background: transparent;
+            color: #8b4513;
+            border: 1px solid rgba(139, 69, 19, 0.3);
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            transition: all 0.2s;
+        }
+        .page-btn:hover:not(:disabled) {
+            background: rgba(139, 69, 19, 0.1);
+            border-color: #8b4513;
+        }
+        .page-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+        .page-info {
+            font-size: 13px;
+            color: #8b7355;
+            letter-spacing: 2px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <div id="ui">
+        <div id="menu">
+            <h1>3D 线框迷宫</h1>
+            <div id="levelSelect">
+                <div class="level-grid" id="levelGrid"></div>
+                <div class="pagination">
+                    <button class="page-btn" id="prevPage" onclick="game.prevPage()">◀ 上一页</button>
+                    <span class="page-info" id="pageInfo">第 1 页</span>
+                    <button class="page-btn" id="nextPage" onclick="game.nextPage()">下一页 ▶</button>
+                </div>
+            </div>
+            <button class="level-btn" id="exportBtn" onclick="game.exportMap()">📥 导出当前地图</button>
+            <div id="instructions">
+                <p>WASD - 移动</p>
+                <p>鼠标 - 控制视角（可上下左右）</p>
+                <p>ESC - 释放鼠标/返回菜单</p>
+                <p>找到绿色出口即可过关</p>
+            </div>
+        </div>
+        <div id="hud">
+            <div>位置: <span id="pos">0, 0</span></div>
+            <div>找到出口!</div>
+        </div>
+        <div id="crosshair"></div>
+        <div id="minimapContainer">
+            <canvas id="minimapCanvas" width="120" height="120"></canvas>
+        </div>
+        <div id="winMessage">
+            <div>🎉 过关! 🎉</div>
+            <button class="level-btn" onclick="game.showMenu()" style="margin-top: 20px;">返回菜单</button>
+        </div>
+    </div>
+
+    <script>
+        // ==================== 3D 数学库 ====================
+        class Vec3 {
+            constructor(x = 0, y = 0, z = 0) {
+                this.x = x; this.y = y; this.z = z;
+            }
+            add(v) { return new Vec3(this.x + v.x, this.y + v.y, this.z + v.z); }
+            sub(v) { return new Vec3(this.x - v.x, this.y - v.y, this.z - v.z); }
+            mul(s) { return new Vec3(this.x * s, this.y * s, this.z * s); }
+            dot(v) { return this.x * v.x + this.y * v.y + this.z * v.z; }
+            cross(v) {
+                return new Vec3(
+                    this.y * v.z - this.z * v.y,
+                    this.z * v.x - this.x * v.z,
+                    this.x * v.y - this.y * v.x
+                );
+            }
+            length() { return Math.sqrt(this.x * this.x + this.y * this.y + this.z * this.z); }
+            normalize() {
+                const len = this.length();
+                return len > 0 ? new Vec3(this.x / len, this.y / len, this.z / len) : new Vec3(0, 0, 0);
+            }
+        }
+
+        // ==================== 带种子的随机数生成器 ====================
+        class SeededRandom {
+            constructor(seed) {
+                this.seed = seed;
+            }
+            
+            // 线性同余生成器 (LCG)
+            next() {
+                this.seed = (this.seed * 9301 + 49297) % 233280;
+                return this.seed / 233280;
+            }
+            
+            // 生成指定范围的随机数
+            range(min, max) {
+                return min + this.next() * (max - min);
+            }
+            
+            // 生成整数随机数
+            rangeInt(min, max) {
+                return Math.floor(this.range(min, max));
+            }
+        }
+
+        // ==================== 迷宫生成器 ====================
+        class MazeGenerator {
+            constructor(width, height, seed) {
+                this.width = width;
+                this.height = height;
+                this.seed = seed;
+                this.rng = new SeededRandom(seed);
+                // 确保尺寸为奇数
+                if (this.width % 2 === 0) this.width++;
+                if (this.height % 2 === 0) this.height++;
+                this.grid = [];
+            }
+
+            generate() {
+                // 初始化：1 = 墙, 0 = 路
+                for (let y = 0; y < this.height; y++) {
+                    this.grid[y] = [];
+                    for (let x = 0; x < this.width; x++) {
+                        this.grid[y][x] = 1;
+                    }
+                }
+
+                // 递归回溯算法
+                const stack = [];
+                const startX = 1;
+                const startY = 1;
+                this.grid[startY][startX] = 0;
+                stack.push({x: startX, y: startY});
+
+                const directions = [
+                    {dx: 0, dy: -2}, {dx: 2, dy: 0},
+                    {dx: 0, dy: 2}, {dx: -2, dy: 0}
+                ];
+
+                while (stack.length > 0) {
+                    const current = stack[stack.length - 1];
+                    const neighbors = [];
+
+                    for (const dir of directions) {
+                        const nx = current.x + dir.dx;
+                        const ny = current.y + dir.dy;
+                        if (nx > 0 && nx < this.width - 1 && 
+                            ny > 0 && ny < this.height - 1 && 
+                            this.grid[ny][nx] === 1) {
+                            neighbors.push({x: nx, y: ny, dx: dir.dx, dy: dir.dy});
+                        }
+                    }
+
+                    if (neighbors.length > 0) {
+                        const next = neighbors[Math.floor(this.rng.next() * neighbors.length)];
+                        // 打通墙壁
+                        this.grid[current.y + next.dy/2][current.x + next.dx/2] = 0;
+                        this.grid[next.y][next.x] = 0;
+                        stack.push({x: next.x, y: next.y});
+                    } else {
+                        stack.pop();
+                    }
+                }
+
+                // 确保出口可达（右下角附近）
+                this.exit = this.findFarthestExit();
+                
+                return this.grid;
+            }
+
+            findFarthestExit() {
+                // BFS找最远的点作为出口
+                const queue = [{x: 1, y: 1, dist: 0}];
+                const visited = new Set(['1,1']);
+                let farthest = {x: 1, y: 1, dist: 0};
+
+                while (queue.length > 0) {
+                    const curr = queue.shift();
+                    if (curr.dist > farthest.dist) {
+                        farthest = curr;
+                    }
+
+                    const dirs = [{dx: 0, dy: -1}, {dx: 1, dy: 0}, {dx: 0, dy: 1}, {dx: -1, dy: 0}];
+                    for (const d of dirs) {
+                        const nx = curr.x + d.dx;
+                        const ny = curr.y + d.dy;
+                        const key = `${nx},${ny}`;
+                        if (nx >= 0 && nx < this.width && ny >= 0 && ny < this.height &&
+                            this.grid[ny][nx] === 0 && !visited.has(key)) {
+                            visited.add(key);
+                            queue.push({x: nx, y: ny, dist: curr.dist + 1});
+                        }
+                    }
+                }
+                return {x: farthest.x, y: farthest.y};
+            }
+
+            isWall(worldX, worldY, cellSize) {
+                // 将世界坐标转换为网格坐标
+                const ix = Math.floor(worldX / cellSize);
+                const iy = Math.floor(worldY / cellSize);
+                if (ix < 0 || ix >= this.width || iy < 0 || iy >= this.height) return true;
+                return this.grid[iy][ix] === 1;
+            }
+
+            checkCollision(x, y, radius, cellSize) {
+                // 检查8个点（更密集的碰撞检测）
+                // 增加一个安全边距，防止贴墙太近导致透视问题
+                const margin = 0.05;
+                const safeRadius = radius + margin;
+                const points = [
+                    {x: x - safeRadius, y: y - safeRadius},
+                    {x: x + safeRadius, y: y - safeRadius},
+                    {x: x - safeRadius, y: y + safeRadius},
+                    {x: x + safeRadius, y: y + safeRadius},
+                    {x: x, y: y - safeRadius},  // 上
+                    {x: x, y: y + safeRadius},  // 下
+                    {x: x - safeRadius, y: y},  // 左
+                    {x: x + safeRadius, y: y}   // 右
+                ];
+                for (const p of points) {
+                    if (this.isWall(p.x, p.y, cellSize)) return true;
+                }
+                return false;
+            }
+        }
+
+        // ==================== 图片墙管理器 ====================
+        class ImageWallManager {
+            constructor() {
+                this.images = []; // 加载的图片数组
+                this.imageWalls = []; // 分配到墙壁的图片 {x, y, face, image, imageIndex}
+                this.loaded = false;
+            }
+
+            // 加载指定路径的图片
+            async loadImages(imagePaths) {
+                console.log('Starting to load images...', imagePaths);
+                const loadPromises = imagePaths.map(path => {
+                    return new Promise((resolve, reject) => {
+                        const img = new Image();
+                        img.onload = () => {
+                            console.log(`Loaded image: ${path}, size: ${img.width}x${img.height}`);
+                            resolve({ img, path });
+                        };
+                        img.onerror = () => {
+                            console.error(`Failed to load image: ${path}`);
+                            resolve(null); // 加载失败也继续
+                        };
+                        img.src = path;
+                    });
+                });
+
+                const results = await Promise.all(loadPromises);
+                this.images = results.filter(r => r !== null).map(r => r.img);
+                this.loaded = this.images.length > 0;
+                console.log(`Total loaded: ${this.images.length}/${imagePaths.length} images`);
+                return this.loaded;
+            }
+
+            // 随机分配图片到墙壁
+            assignImagesToWalls(mazeGrid, cellSize, wallHeight, seed) {
+                this.imageWalls = [];
+                if (!this.loaded || this.images.length === 0) return;
+
+                const height = mazeGrid.length;
+                const width = mazeGrid[0].length;
+                const wallCells = [];
+
+                // 收集所有墙壁格子
+                for (let y = 0; y < height; y++) {
+                    for (let x = 0; x < width; x++) {
+                        if (mazeGrid[y][x] === 1) {
+                            // 检查四个面，记录哪些面是可见的（相邻是路）
+                            const faces = [];
+                            if (y > 0 && mazeGrid[y-1][x] === 0) faces.push('front');     // 北面是路
+                            if (y < height-1 && mazeGrid[y+1][x] === 0) faces.push('back'); // 南面是路
+                            if (x > 0 && mazeGrid[y][x-1] === 0) faces.push('left');      // 西面是路
+                            if (x < width-1 && mazeGrid[y][x+1] === 0) faces.push('right'); // 东面是路
+                            
+                            if (faces.length > 0) {
+                                wallCells.push({x, y, faces});
+                            }
+                        }
+                    }
+                }
+
+                // 随机打乱墙壁顺序（使用固定种子）
+                const rng = new SeededRandom(seed || 12345);
+                for (let i = wallCells.length - 1; i > 0; i--) {
+                    const j = Math.floor(rng.next() * (i + 1));
+                    [wallCells[i], wallCells[j]] = [wallCells[j], wallCells[i]];
+                }
+
+                // 分配图片到墙壁（每张图片分配到一个随机墙壁的随机面）
+                const rng2 = new SeededRandom((seed || 12345) * 7 + 13);
+                for (let i = 0; i < this.images.length; i++) {
+                    if (i >= wallCells.length) break;
+                    
+                    const cell = wallCells[i];
+                    const face = cell.faces[Math.floor(rng2.next() * cell.faces.length)];
+                    
+                    this.imageWalls.push({
+                        x: cell.x,
+                        y: cell.y,
+                        face: face,
+                        image: this.images[i],
+                        imageIndex: i
+                    });
+                }
+
+                console.log(`Assigned ${this.imageWalls.length} images to walls`);
+            }
+
+            // 获取某面墙的图片信息
+            getImageAt(x, y, face) {
+                return this.imageWalls.find(w => w.x === x && w.y === y && w.face === face);
+            }
+
+            // 检查某格子是否有图片墙
+            hasImageAt(x, y) {
+                return this.imageWalls.some(w => w.x === x && w.y === y);
+            }
+
+            // 获取格子的所有图片面
+            getImageFacesAt(x, y) {
+                return this.imageWalls.filter(w => w.x === x && w.y === y).map(w => w.face);
+            }
+        }
+
+        // ==================== 游戏主类 ====================
+        class Game {
+            constructor() {
+                this.canvas = document.getElementById('gameCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.resize();
+                
+                this.state = 'menu'; // menu, playing, won
+                this.maze = null;
+                this.cellSize = 2; // 每个格子2个单位
+                this.wallHeight = 2.5;
+                
+                // 图片墙管理器
+                this.imageManager = new ImageWallManager();
+                
+                // 玩家状态
+                this.player = {
+                    x: 1.5, y: 1.5, z: 1.25, // 位置 (z是高度)
+                    yaw: 0, pitch: 0,         // 朝向角度（弧度）
+                    radius: 0.3  // 碰撞半径
+                };
+                
+                // 输入状态
+                this.keys = {};
+                this.mouseLocked = false;
+                
+                // 3D 渲染参数
+                this.fov = Math.PI / 3; // 60度视野
+                this.near = 0.1;  // 近裁剪面，防止贴墙透视
+                this.far = 100;
+                
+                // 出口
+                this.exit = null;
+                this.currentLevel = 1;
+                
+                // 小地图相关
+                this.minimapCanvas = document.getElementById('minimapCanvas');
+                this.minimapCtx = this.minimapCanvas.getContext('2d');
+                
+                // 关卡系统参数
+                this.currentPage = 0;
+                this.levelsPerPage = 9; // 3x3 网格
+                this.levelsPerRow = 3;
+                this.maxPages = 10; // 最多10页
+                this.completedLevels = new Set(); // 已完成的关卡
+                
+                this.setupEvents();
+                this.renderLevelSelect();
+                this.loop();
+            }
+            
+            // 获取关卡尺寸（根据关卡号和页面递增难度）
+            getLevelSize(levelNum) {
+                // 基础尺寸
+                const baseSize = 15;
+                // 每页增加的尺寸
+                const pageBonus = Math.floor((levelNum - 1) / this.levelsPerPage) * 4;
+                // 关卡内递增
+                const levelBonus = ((levelNum - 1) % this.levelsPerPage) * 2;
+                
+                const size = baseSize + pageBonus + levelBonus;
+                return { w: size, h: size };
+            }
+            
+            // 获取关卡种子（固定种子确保每次生成相同）
+            getLevelSeed(levelNum) {
+                // 使用关卡号作为种子基础
+                return levelNum * 12345 + 67890;
+            }
+            
+            // 渲染关卡选择界面
+            renderLevelSelect() {
+                const grid = document.getElementById('levelGrid');
+                const pageInfo = document.getElementById('pageInfo');
+                const prevBtn = document.getElementById('prevPage');
+                const nextBtn = document.getElementById('nextPage');
+                
+                // 更新页面信息
+                pageInfo.textContent = `第 ${this.currentPage + 1} 页`;
+                prevBtn.disabled = this.currentPage === 0;
+                nextBtn.disabled = this.currentPage >= this.maxPages - 1;
+                
+                // 清空网格
+                grid.innerHTML = '';
+                
+                // 生成网格按钮
+                const startLevel = this.currentPage * this.levelsPerPage + 1;
+                
+                for (let i = 0; i < this.levelsPerPage; i++) {
+                    const levelNum = startLevel + i;
+                    const size = this.getLevelSize(levelNum);
+                    
+                    const btn = document.createElement('button');
+                    btn.className = 'level-grid-btn';
+                    if (this.completedLevels.has(levelNum)) {
+                        btn.classList.add('completed');
+                    }
+                    if (levelNum === this.currentLevel && this.state !== 'menu') {
+                        btn.classList.add('current');
+                    }
+                    
+                    btn.innerHTML = `
+                        ${levelNum}
+                        <div class="level-size">${size.w}×${size.h}</div>
+                    `;
+                    btn.onclick = () => this.startLevel(levelNum);
+                    
+                    grid.appendChild(btn);
+                }
+            }
+            
+            // 上一页
+            prevPage() {
+                if (this.currentPage > 0) {
+                    this.currentPage--;
+                    this.renderLevelSelect();
+                }
+            }
+            
+            // 下一页
+            nextPage() {
+                if (this.currentPage < this.maxPages - 1) {
+                    this.currentPage++;
+                    this.renderLevelSelect();
+                }
+            }
+
+            resize() {
+                this.canvas.width = window.innerWidth;
+                this.canvas.height = window.innerHeight;
+                this.aspect = this.canvas.width / this.canvas.height;
+            }
+
+            setupEvents() {
+                window.addEventListener('resize', () => this.resize());
+                
+                // 键盘
+                window.addEventListener('keydown', (e) => {
+                    this.keys[e.code] = true;
+                    if (e.code === 'Escape') {
+                        this.showMenu();
+                    }
+                });
+                window.addEventListener('keyup', (e) => this.keys[e.code] = false);
+                
+                // 鼠标锁定
+                this.canvas.addEventListener('click', () => {
+                    if (this.state === 'playing' && !this.mouseLocked) {
+                        this.canvas.requestPointerLock();
+                    }
+                });
+                
+                document.addEventListener('pointerlockchange', () => {
+                    this.mouseLocked = document.pointerLockElement === this.canvas;
+                });
+                
+                document.addEventListener('mousemove', (e) => {
+                    if (this.mouseLocked && this.state === 'playing') {
+                        // yaw: 左右旋转
+                        // 鼠标左移(-X)，视角左看，yaw应该减小
+                        // 鼠标右移(+X)，视角右看，yaw应该增加
+                        this.player.yaw += e.movementX * 0.003;
+                        
+                        // pitch: 上下俯仰
+                        // 鼠标上移(-Y)，应该向上看
+                        this.player.pitch -= e.movementY * 0.003;
+                        
+                        // 限制俯仰角，防止翻转
+                        this.player.pitch = Math.max(-Math.PI/2 + 0.1, 
+                            Math.min(Math.PI/2 - 0.1, this.player.pitch));
+                    }
+                });
+            }
+
+            async startLevel(level) {
+                this.currentLevel = level;
+                const size = this.getLevelSize(level);
+                const seed = this.getLevelSeed(level);
+                
+                this.maze = new MazeGenerator(size.w, size.h, seed);
+                this.maze.generate();
+                this.exit = this.maze.exit;
+                
+                // 加载并分配图片到墙壁
+                if (!this.imageManager.loaded) {
+                    const imageFiles = [
+                        'image/IMG_20250502_130433.jpg',
+                        'image/IMG_20250504_225115.jpg',
+                        'image/IMG_20250802_150513.jpg',
+                        'image/IMG_20250819_151055.jpg',
+                        'image/IMG_20251117_150044.jpg',
+                        'image/IMG_20260101_135709.jpg',
+                        'image/MEITU_20251031_164622176.jpg',
+                        'image/MTXX_20260102_184019686.jpg',
+                        'image/wx_camera_1760023606279.jpg'
+                    ];
+                    await this.imageManager.loadImages(imageFiles);
+                }
+                this.imageManager.assignImagesToWalls(this.maze.grid, this.cellSize, this.wallHeight, seed);
+                
+                // 重置玩家位置（迷宫起点(1,1)转换为世界坐标）
+                // 网格(1,1) -> 世界坐标(1*cellSize + cellSize/2, 1*cellSize + cellSize/2)
+                this.player.x = 1 * this.cellSize + this.cellSize / 2;
+                this.player.y = 1 * this.cellSize + this.cellSize / 2;
+                this.player.z = 1.25;
+                this.player.yaw = 0;
+                this.player.pitch = 0;
+                
+                this.state = 'playing';
+                document.getElementById('menu').style.display = 'none';
+                document.getElementById('hud').style.display = 'block';
+                document.getElementById('crosshair').style.display = 'block';
+                document.getElementById('winMessage').style.display = 'none';
+                document.getElementById('minimapContainer').style.display = 'block';
+                
+                // 初始化迷雾地图
+                this.initMinimap();
+                
+                this.canvas.requestPointerLock();
+            }
+
+            showMenu() {
+                this.state = 'menu';
+                document.exitPointerLock();
+                document.getElementById('menu').style.display = 'block';
+                document.getElementById('hud').style.display = 'none';
+                document.getElementById('crosshair').style.display = 'none';
+                document.getElementById('winMessage').style.display = 'none';
+                document.getElementById('minimapContainer').style.display = 'none';
+                this.renderLevelSelect();
+            }
+
+            win() {
+                this.state = 'won';
+                this.completedLevels.add(this.currentLevel);
+                document.exitPointerLock();
+                document.getElementById('winMessage').style.display = 'block';
+                // 重新渲染关卡选择界面以显示完成状态
+                this.renderLevelSelect();
+            }
+
+            // 导出地图到文件
+            exportMap() {
+                if (!this.maze) {
+                    alert('请先生成一个迷宫！');
+                    return;
+                }
+
+                let mapText = `3D迷宫地图 - 第${this.currentLevel}关\n`;
+                mapText += `尺寸: ${this.maze.width} x ${this.maze.height}\n`;
+                mapText += `起点: (1, 1)\n`;
+                mapText += `出口: (${this.exit.x}, ${this.exit.y})\n`;
+                mapText += `图例: #=墙 .=路 S=起点 E=出口\n`;
+                mapText += '='.repeat(this.maze.width + 4) + '\n';
+
+                for (let y = 0; y < this.maze.height; y++) {
+                    let line = '# ';
+                    for (let x = 0; x < this.maze.width; x++) {
+                        if (x === 1 && y === 1) {
+                            line += 'S';
+                        } else if (x === this.exit.x && y === this.exit.y) {
+                            line += 'E';
+                        } else if (this.maze.grid[y][x] === 1) {
+                            line += '#';
+                        } else {
+                            line += '.';
+                        }
+                    }
+                    line += ' #';
+                    mapText += line + '\n';
+                }
+
+                mapText += '='.repeat(this.maze.width + 4) + '\n';
+
+                // 创建并下载文件
+                const blob = new Blob([mapText], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `maze_map_level${this.currentLevel}.txt`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }
+
+            update(dt) {
+                if (this.state !== 'playing') return;
+
+                const speed = 4 * dt; // 移动速度
+                const rotSpeed = 2 * dt; // 旋转速度
+
+                // 键盘旋转（如果没有鼠标锁定）
+                if (!this.mouseLocked) {
+                    if (this.keys['ArrowLeft']) this.player.yaw += rotSpeed;
+                    if (this.keys['ArrowRight']) this.player.yaw -= rotSpeed;
+                }
+
+                // 计算移动方向
+                let moveX = 0, moveY = 0;
+                
+                const cosYaw = Math.cos(this.player.yaw);
+                const sinYaw = Math.sin(this.player.yaw);
+
+                // 移动方向：W向前（面对的方向），S向后
+                // yaw定义：0表示面向-Y方向（北/上），PI/2面向+X（东/右），-PI/2面向-X（西/左），PI面向+Y（南/下）
+                // 前进方向 = (sin(yaw), -cos(yaw))
+                if (this.keys['KeyW']) {
+                    moveX += Math.sin(this.player.yaw) * speed;
+                    moveY -= Math.cos(this.player.yaw) * speed;
+                }
+                if (this.keys['KeyS']) {
+                    moveX -= Math.sin(this.player.yaw) * speed;
+                    moveY += Math.cos(this.player.yaw) * speed;
+                }
+                if (this.keys['KeyA']) {
+                    // 左移 = 前进方向 - 90度
+                    moveX += Math.sin(this.player.yaw - Math.PI/2) * speed;
+                    moveY -= Math.cos(this.player.yaw - Math.PI/2) * speed;
+                }
+                if (this.keys['KeyD']) {
+                    // 右移 = 前进方向 + 90度
+                    moveX += Math.sin(this.player.yaw + Math.PI/2) * speed;
+                    moveY -= Math.cos(this.player.yaw + Math.PI/2) * speed;
+                }
+
+                // 碰撞检测和移动
+                if (!this.maze.checkCollision(this.player.x + moveX, this.player.y, this.player.radius, this.cellSize)) {
+                    this.player.x += moveX;
+                }
+                if (!this.maze.checkCollision(this.player.x, this.player.y + moveY, this.player.radius, this.cellSize)) {
+                    this.player.y += moveY;
+                }
+
+                // 检查是否到达出口
+                // 注意：this.exit 是网格坐标，需要转换为世界坐标
+                const exitWorldX = this.exit.x * this.cellSize + this.cellSize / 2;
+                const exitWorldY = this.exit.y * this.cellSize + this.cellSize / 2;
+                const dx = this.player.x - exitWorldX;
+                const dy = this.player.y - exitWorldY;
+                const distToExit = Math.sqrt(dx * dx + dy * dy);
+                if (distToExit < 0.8) {
+                    this.win();
+                }
+
+                // 更新HUD
+                const gridX = Math.floor(this.player.x / this.cellSize);
+                const gridY = Math.floor(this.player.y / this.cellSize);
+                document.getElementById('pos').textContent = 
+                    `${gridX}, ${gridY} (${this.player.x.toFixed(1)}, ${this.player.y.toFixed(1)})`;
+                
+                // 更新小地图探索区域
+                this.updateMinimap(gridX, gridY);
+            }
+
+            // 初始化小地图
+            initMinimap() {
+                // 无需初始化
+            }
+
+            // 更新小地图探索区域（现在每帧直接根据距离计算，无需此方法）
+            updateMinimap(playerGridX, playerGridY) {
+                // 无需更新
+            }
+
+            // 绘制小地图
+            renderMinimap() {
+                if (!this.maze) return;
+                
+                const ctx = this.minimapCtx;
+                const size = this.minimapCanvas.width;
+                const cellW = size / this.maze.width;
+                const cellH = size / this.maze.height;
+                
+                // 清空画布
+                ctx.clearRect(0, 0, size, size);
+                
+                // 玩家精确位置
+                const px = (this.player.x / this.cellSize) * cellW;
+                const py = (this.player.y / this.cellSize) * cellH;
+                
+                // 视野半径（更大一点）
+                const viewRadius = cellW * 3.5;  // 3.5格半径内可见
+                const fadeStart = cellW * 2.5;   // 2.5格内完全不透明
+                
+                // 先绘制终点（始终完全显示）
+                const exitPx = this.exit.x * cellW;
+                const exitPy = this.exit.y * cellH;
+                ctx.fillStyle = 'rgb(241, 144, 140)';
+                ctx.fillRect(exitPx, exitPy, cellW + 1, cellH + 1);
+                
+                // 存储需要绘制粉色标记的位置
+                const pinkMarks = [];
+                
+                // 遍历所有格子，根据距离计算透明度（终点除外）
+                for (let y = 0; y < this.maze.height; y++) {
+                    for (let x = 0; x < this.maze.width; x++) {
+                        // 终点已单独绘制，跳过
+                        if (x === this.exit.x && y === this.exit.y) continue;
+                        
+                        const cellPx = x * cellW;
+                        const cellPy = y * cellH;
+                        const cellCx = cellPx + cellW/2;
+                        const cellCy = cellPy + cellH/2;
+                        
+                        // 计算到玩家的距离
+                        const dx = cellCx - px;
+                        const dy = cellCy - py;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        
+                        // 计算透明度
+                        let alpha = 0;
+                        if (dist < fadeStart) {
+                            alpha = 1;  // 2.5格内完全不透明
+                        } else if (dist < viewRadius) {
+                            alpha = 1 - (dist - fadeStart) / (viewRadius - fadeStart);
+                        }
+                        
+                        if (alpha <= 0) continue;
+                        
+                        ctx.globalAlpha = alpha;
+                        
+                        // 墙壁
+                        if (this.maze.grid[y][x] === 1) {
+                            ctx.fillStyle = '#8b4513';
+                            ctx.fillRect(cellPx, cellPy, cellW + 1, cellH + 1);
+                            
+                            // 检查这个墙壁是否有图片，记录需要标记的面
+                            if (this.imageManager && this.imageManager.hasImageAt(x, y)) {
+                                const faces = this.imageManager.getImageFacesAt(x, y);
+                                pinkMarks.push({x, y, faces, cellPx, cellPy, alpha});
+                            }
+                        }
+                    }
+                }
+                
+                ctx.globalAlpha = 1;
+                
+                // 绘制粉色标记（图片墙指示）
+                ctx.strokeStyle = 'rgb(241, 144, 140)'; // 与主角和终点相同的粉色
+                ctx.lineWidth = 2;
+                for (const mark of pinkMarks) {
+                    ctx.globalAlpha = mark.alpha;
+                    for (const face of mark.faces) {
+                        ctx.beginPath();
+                        if (face === 'front') {
+                            // 上方横线
+                            ctx.moveTo(mark.cellPx, mark.cellPy);
+                            ctx.lineTo(mark.cellPx + cellW, mark.cellPy);
+                        } else if (face === 'back') {
+                            // 下方横线
+                            ctx.moveTo(mark.cellPx, mark.cellPy + cellH);
+                            ctx.lineTo(mark.cellPx + cellW, mark.cellPy + cellH);
+                        } else if (face === 'left') {
+                            // 左侧竖线
+                            ctx.moveTo(mark.cellPx, mark.cellPy);
+                            ctx.lineTo(mark.cellPx, mark.cellPy + cellH);
+                        } else if (face === 'right') {
+                            // 右侧竖线
+                            ctx.moveTo(mark.cellPx + cellW, mark.cellPy);
+                            ctx.lineTo(mark.cellPx + cellW, mark.cellPy + cellH);
+                        }
+                        ctx.stroke();
+                    }
+                }
+                ctx.globalAlpha = 1;
+                
+                // 绘制玩家圆点（始终完全不透明）
+                ctx.fillStyle = 'rgb(241, 144, 140)';
+                ctx.beginPath();
+                ctx.arc(px, py, Math.max(cellW, cellH) * 0.7, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // 将3D点投影到屏幕
+            project(x, y, z) {
+                // 1. 计算点相对于相机的偏移
+                const dx = x - this.player.x;
+                const dy = y - this.player.y;
+                const dz = z - this.player.z;
+
+                // 2. 应用yaw旋转（水平旋转，绕垂直轴）
+                const cy = Math.cos(this.player.yaw);
+                const sy = Math.sin(this.player.yaw);
+                
+                const camX = dx * cy + dy * sy;       // 相机空间的X（右为正）
+                const camZ = dx * sy - dy * cy;       // 相机空间的Z（前为正，深度）
+                
+                // 3. 处理高度和pitch（垂直旋转，绕X轴）
+                const cp = Math.cos(this.player.pitch);
+                const sp = Math.sin(this.player.pitch);
+                
+                const y_before = -dz;
+                const camY = y_before * cp + camZ * sp;    // 屏幕垂直方向（向下为正）
+                const finalZ = -y_before * sp + camZ * cp; // 深度（必须为正）
+                
+                // 4. 透视投影 - 使用实际深度
+                const scale = (this.canvas.height / 2) / Math.tan(this.fov / 2);
+                
+                // 返回相机空间坐标，用于后续裁剪
+                return {
+                    x: (camX / finalZ) * scale + this.canvas.width / 2,
+                    y: (camY / finalZ) * scale + this.canvas.height / 2,
+                    depth: finalZ,
+                    camX: camX,
+                    camY: camY,
+                    camZ: finalZ,
+                    // 点在相机前面才算可见
+                    visible: finalZ > this.near
+                };
+            }
+
+            // 裁剪线段到近裁剪面
+            clipLineToNear(p1, p2) {
+                const near = this.near;
+                
+                // 如果两个点都在前面，直接返回
+                if (p1.camZ >= near && p2.camZ >= near) {
+                    return [p1, p2];
+                }
+                
+                // 如果两个点都在后面，丢弃
+                if (p1.camZ < near && p2.camZ < near) {
+                    return null;
+                }
+                
+                // 需要裁剪 - 一个在前一个在后
+                const t = (near - p1.camZ) / (p2.camZ - p1.camZ);
+                const scale = (this.canvas.height / 2) / Math.tan(this.fov / 2);
+                
+                // 计算裁剪点
+                const clipCamX = p1.camX + t * (p2.camX - p1.camX);
+                const clipCamY = p1.camY + t * (p2.camY - p1.camY);
+                const clipCamZ = near;
+                
+                const clipPx = (clipCamX / near) * scale + this.canvas.width / 2;
+                const clipPy = (clipCamY / near) * scale + this.canvas.height / 2;
+                
+                const clipPoint = {
+                    x: clipPx,
+                    y: clipPy,
+                    depth: near,
+                    camX: clipCamX,
+                    camY: clipCamY,
+                    camZ: near,
+                    visible: true
+                };
+                
+                if (p1.camZ >= near) {
+                    return [p1, clipPoint];
+                } else {
+                    return [clipPoint, p2];
+                }
+            }
+
+            // 绘制3D线段（深棕色实心线）
+            drawLine3D(x1, y1, z1, x2, y2, z2, color = '#8b4513', lineWidth = 1.5) {
+                const p1 = this.project(x1, y1, z1);
+                const p2 = this.project(x2, y2, z2);
+                
+                // 如果两个点都没有投影，不绘制
+                if (!p1 || !p2) return;
+                
+                // 裁剪到近裁剪面
+                const clipped = this.clipLineToNear(p1, p2);
+                if (!clipped) return;
+                
+                const [cp1, cp2] = clipped;
+                
+                // 检查坐标有效性
+                if (!isFinite(cp1.x) || !isFinite(cp1.y) || !isFinite(cp2.x) || !isFinite(cp2.y)) {
+                    return;
+                }
+                
+                this.ctx.strokeStyle = color;
+                this.ctx.lineWidth = lineWidth;
+                this.ctx.lineCap = 'round';
+                this.ctx.lineJoin = 'round';
+                this.ctx.beginPath();
+                this.ctx.moveTo(cp1.x, cp1.y);
+                this.ctx.lineTo(cp2.x, cp2.y);
+                this.ctx.stroke();
+            }
+
+            // 判断面是否朝向相机（背面剔除）
+            isFaceVisible(normal, faceCenter) {
+                // 计算从面中心到相机的向量
+                const toCameraX = this.player.x - faceCenter.x;
+                const toCameraY = this.player.y - faceCenter.y;
+                const toCameraZ = this.player.z - faceCenter.z;
+                
+                // 如果法向量与看向相机的向量的点积 > 0，则面朝相机
+                const dot = normal.x * toCameraX + normal.y * toCameraY + normal.z * toCameraZ;
+                return dot > 0;
+            }
+
+            // 绘制填充的面（实心墙）- 4个点都必须有坐标（不管visible标记）
+            drawFilledFace(p1, p2, p3, p4) {
+                // 只要有坐标就绘制（visible标记只表示是否在裁剪面内，不影响绘制）
+                if (!p1 || !p2 || !p3 || !p4) return;
+                if (!isFinite(p1.x) || !isFinite(p1.y)) return;
+                if (!isFinite(p2.x) || !isFinite(p2.y)) return;
+                if (!isFinite(p3.x) || !isFinite(p3.y)) return;
+                if (!isFinite(p4.x) || !isFinite(p4.y)) return;
+                
+                this.ctx.fillStyle = '#f5f5dc';
+                this.ctx.beginPath();
+                this.ctx.moveTo(p1.x, p1.y);
+                this.ctx.lineTo(p2.x, p2.y);
+                this.ctx.lineTo(p3.x, p3.y);
+                this.ctx.lineTo(p4.x, p4.y);
+                this.ctx.closePath();
+                this.ctx.fill();
+            }
+
+            // 绘制一个实心立方体（墙）- 只绘制朝向相机的面
+            drawWall(x, y, size, height, gridX, gridY) {
+                const x1 = x, y1 = y;
+                const x2 = x + size, y2 = y + size;
+                const h = height;
+                
+                // 墙中心
+                const cx = (x1 + x2) / 2;
+                const cy = (y1 + y2) / 2;
+                const cz = h / 2;
+                
+                // 定义5个面（带法向量）
+                const faces = [
+                    {   // 前面 (y = y1)，法向量指向 -Y
+                        normal: {x: 0, y: -1, z: 0},
+                        center: {x: cx, y: y1, z: cz},
+                        corners: [{x:x1,y:y1,z:0}, {x:x2,y:y1,z:0}, {x:x2,y:y1,z:h}, {x:x1,y:y1,z:h}],
+                        faceName: 'front'
+                    },
+                    {   // 后面 (y = y2)，法向量指向 +Y
+                        normal: {x: 0, y: 1, z: 0},
+                        center: {x: cx, y: y2, z: cz},
+                        corners: [{x:x2,y:y2,z:0}, {x:x1,y:y2,z:0}, {x:x1,y:y2,z:h}, {x:x2,y:y2,z:h}],
+                        faceName: 'back'
+                    },
+                    {   // 左面 (x = x1)，法向量指向 -X
+                        normal: {x: -1, y: 0, z: 0},
+                        center: {x: x1, y: cy, z: cz},
+                        corners: [{x:x1,y:y2,z:0}, {x:x1,y:y1,z:0}, {x:x1,y:y1,z:h}, {x:x1,y:y2,z:h}],
+                        faceName: 'left'
+                    },
+                    {   // 右面 (x = x2)，法向量指向 +X
+                        normal: {x: 1, y: 0, z: 0},
+                        center: {x: x2, y: cy, z: cz},
+                        corners: [{x:x2,y:y1,z:0}, {x:x2,y:y2,z:0}, {x:x2,y:y2,z:h}, {x:x2,y:y1,z:h}],
+                        faceName: 'right'
+                    },
+                    {   // 顶面 (z = h)，法向量指向 +Z
+                        normal: {x: 0, y: 0, z: 1},
+                        center: {x: cx, y: cy, z: h},
+                        corners: [{x:x1,y:y1,z:h}, {x:x2,y:y1,z:h}, {x:x2,y:y2,z:h}, {x:x1,y:y2,z:h}],
+                        faceName: 'top'
+                    }
+                ];
+
+                // 筛选朝向相机且至少部分在近裁剪面前的面
+                const visibleFaces = [];
+                for (const face of faces) {
+                    const toCamX = this.player.x - face.center.x;
+                    const toCamY = this.player.y - face.center.y;
+                    const toCamZ = this.player.z - face.center.z;
+                    
+                    // 点积 > 0 表示面朝相机
+                    const dot = face.normal.x * toCamX + 
+                               face.normal.y * toCamY + 
+                               face.normal.z * toCamZ;
+                    
+                    if (dot > 0) {
+                        const dist = Math.sqrt(toCamX*toCamX + toCamY*toCamY + toCamZ*toCamZ);
+                        visibleFaces.push({face, dist});
+                    }
+                }
+                
+                // 按距离排序（远的先画）
+                visibleFaces.sort((a, b) => b.dist - a.dist);
+
+                // 绘制可见面
+                for (const {face} of visibleFaces) {
+                    // 投影四个角并裁剪
+                    const rawPoints = face.corners.map(c => 
+                        this.project(c.x, c.y, c.z)
+                    );
+                    
+                    // 检查是否有任何点可见（在相机前面）
+                    const anyVisible = rawPoints.some(p => p && p.visible);
+                    if (!anyVisible) continue;
+                    
+                    // 对多边形进行近裁剪面裁剪
+                    const clippedPolygon = this.clipPolygonToNear(rawPoints);
+                    if (clippedPolygon.length < 3) continue;
+                    
+                    // 填充裁剪后的多边形
+                    this.ctx.fillStyle = '#f5f5dc';
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(clippedPolygon[0].x, clippedPolygon[0].y);
+                    for (let i = 1; i < clippedPolygon.length; i++) {
+                        this.ctx.lineTo(clippedPolygon[i].x, clippedPolygon[i].y);
+                    }
+                    this.ctx.closePath();
+                    this.ctx.fill();
+                    
+                    // 绘制图片（如果这面墙有这个面的图片）
+                    if (gridX !== undefined && gridY !== undefined && face.faceName !== 'top') {
+                        const imgInfo = this.imageManager.getImageAt(gridX, gridY, face.faceName);
+                        if (imgInfo) {
+                            this.drawImageOnFace(face, imgInfo.image, x1, y1, x2, y2, h);
+                        }
+                    }
+                    
+                    // 绘制边框（原始边，带裁剪）
+                    for (let i = 0; i < 4; i++) {
+                        const c1 = face.corners[i];
+                        const c2 = face.corners[(i + 1) % 4];
+                        this.drawLine3D(c1.x, c1.y, c1.z, c2.x, c2.y, c2.z);
+                    }
+                }
+            }
+
+            // 在墙面上绘制图片（保持宽高比）
+            drawImageOnFace(face, image, x1, y1, x2, y2, h) {
+                const imgWidth = image.width;
+                const imgHeight = image.height;
+                const aspectRatio = imgWidth / imgHeight;
+                
+                // 计算墙面尺寸
+                let wallWidth, wallHeight;
+                if (face.faceName === 'front' || face.faceName === 'back') {
+                    wallWidth = x2 - x1;
+                    wallHeight = h;
+                } else { // left or right
+                    wallWidth = y2 - y1;
+                    wallHeight = h;
+                }
+                
+                // 计算图片在墙上的显示尺寸（保持宽高比，fit模式）
+                let drawWidth, drawHeight;
+                const wallAspect = wallWidth / wallHeight;
+                
+                if (aspectRatio > wallAspect) {
+                    // 图片更宽，以宽度为准
+                    drawWidth = wallWidth * 0.9; // 留一点边距
+                    drawHeight = drawWidth / aspectRatio;
+                } else {
+                    // 图片更高，以高度为准
+                    drawHeight = wallHeight * 0.9;
+                    drawWidth = drawHeight * aspectRatio;
+                }
+                
+                // 限制最大高度不超过墙高
+                if (drawHeight > wallHeight * 0.95) {
+                    drawHeight = wallHeight * 0.95;
+                    drawWidth = drawHeight * aspectRatio;
+                }
+                
+                // 计算图片在墙上的位置（居中）
+                let imgX, imgY, imgZ1, imgZ2;
+                const paddingX = (wallWidth - drawWidth) / 2;
+                const paddingY = (wallHeight - drawHeight) / 2;
+                
+                if (face.faceName === 'front') {
+                    imgX = x1 + paddingX;
+                    imgY = y1;
+                    imgZ1 = paddingY;
+                    imgZ2 = paddingY + drawHeight;
+                } else if (face.faceName === 'back') {
+                    imgX = x2 - paddingX - drawWidth;
+                    imgY = y2;
+                    imgZ1 = paddingY;
+                    imgZ2 = paddingY + drawHeight;
+                } else if (face.faceName === 'left') {
+                    imgX = x1;
+                    imgY = y2 - paddingX - drawWidth;
+                    imgZ1 = paddingY;
+                    imgZ2 = paddingY + drawHeight;
+                } else { // right
+                    imgX = x2;
+                    imgY = y1 + paddingX;
+                    imgZ1 = paddingY;
+                    imgZ2 = paddingY + drawHeight;
+                }
+                
+                // 投影图片的四个角
+                let p1, p2, p3, p4;
+                if (face.faceName === 'front' || face.faceName === 'back') {
+                    p1 = this.project(imgX, imgY, imgZ1);
+                    p2 = this.project(imgX + drawWidth, imgY, imgZ1);
+                    p3 = this.project(imgX + drawWidth, imgY, imgZ2);
+                    p4 = this.project(imgX, imgY, imgZ2);
+                } else { // left or right
+                    p1 = this.project(imgX, imgY, imgZ1);
+                    p2 = this.project(imgX, imgY + drawWidth, imgZ1);
+                    p3 = this.project(imgX, imgY + drawWidth, imgZ2);
+                    p4 = this.project(imgX, imgY, imgZ2);
+                }
+                
+                // 检查所有点是否有效
+                if (!p1 || !p2 || !p3 || !p4) return;
+                
+                // 检查是否有任何点可见（在相机前面）
+                const anyVisible = [p1, p2, p3, p4].some(p => p && p.visible);
+                if (!anyVisible) return;
+                
+                // 使用与墙壁相同的裁剪方法
+                const rawPoints = [p1, p2, p3, p4];
+                const clippedPolygon = this.clipPolygonToNear(rawPoints);
+                if (clippedPolygon.length < 3) return;
+                
+                // 绘制图片
+                this.drawTexturedQuad(image, p1, p2, p3, p4, clippedPolygon);
+            }
+
+            // 绘制纹理四边形（使用裁剪后的多边形）
+            drawTexturedQuad(image, p1, p2, p3, p4, clippedPolygon) {
+                this.ctx.save();
+                
+                // 使用裁剪后的多边形作为裁剪路径
+                this.ctx.beginPath();
+                this.ctx.moveTo(clippedPolygon[0].x, clippedPolygon[0].y);
+                for (let i = 1; i < clippedPolygon.length; i++) {
+                    this.ctx.lineTo(clippedPolygon[i].x, clippedPolygon[i].y);
+                }
+                this.ctx.closePath();
+                this.ctx.clip();
+                
+                // 计算原始四边形的边界框
+                const minX = Math.min(p1.x, p2.x, p3.x, p4.x);
+                const maxX = Math.max(p1.x, p2.x, p3.x, p4.x);
+                const minY = Math.min(p1.y, p2.y, p3.y, p4.y);
+                const maxY = Math.max(p1.y, p2.y, p3.y, p4.y);
+                const width = maxX - minX;
+                const height = maxY - minY;
+                
+                // 如果边界框太小，不绘制
+                if (width < 2 || height < 2) {
+                    this.ctx.restore();
+                    return;
+                }
+                
+                // 绘制图片覆盖整个裁剪区域
+                try {
+                    this.ctx.drawImage(image, minX, minY, width, height);
+                } catch (e) {
+                    console.warn('Failed to draw image:', e);
+                    this.ctx.fillStyle = 'rgba(150, 150, 150, 0.8)';
+                    this.ctx.fill();
+                }
+                
+                this.ctx.restore();
+            }
+
+            // Sutherland-Hodgman 多边形裁剪算法
+            clipPolygonToNear(points) {
+                const near = this.near;
+                const result = [];
+                
+                for (let i = 0; i < points.length; i++) {
+                    const curr = points[i];
+                    const prev = points[(i - 1 + points.length) % points.length];
+                    
+                    if (!curr || !prev) continue;
+                    
+                    const currIn = curr.camZ >= near;
+                    const prevIn = prev.camZ >= near;
+                    
+                    if (currIn && prevIn) {
+                        // 两个点都在内，添加当前点
+                        result.push(curr);
+                    } else if (currIn && !prevIn) {
+                        // 从外到内，添加交点和当前点
+                        const clip = this.computeClipPoint(prev, curr, near);
+                        if (clip) result.push(clip);
+                        result.push(curr);
+                    } else if (!currIn && prevIn) {
+                        // 从内到外，添加交点
+                        const clip = this.computeClipPoint(prev, curr, near);
+                        if (clip) result.push(clip);
+                    }
+                    // 两个点都在外，不添加
+                }
+                
+                return result;
+            }
+
+            // 计算两个点与近裁剪面的交点
+            computeClipPoint(p1, p2, near) {
+                const t = (near - p1.camZ) / (p2.camZ - p1.camZ);
+                if (t < 0 || t > 1) return null;
+                
+                const scale = (this.canvas.height / 2) / Math.tan(this.fov / 2);
+                
+                const camX = p1.camX + t * (p2.camX - p1.camX);
+                const camY = p1.camY + t * (p2.camY - p1.camY);
+                
+                return {
+                    x: (camX / near) * scale + this.canvas.width / 2,
+                    y: (camY / near) * scale + this.canvas.height / 2,
+                    depth: near,
+                    camX: camX,
+                    camY: camY,
+                    camZ: near,
+                    visible: true
+                };
+            }
+
+            // 绘制出口标记（绘制所有面）
+            drawExit(x, y, size, height, time) {
+                const x1 = x, y1 = y;
+                const x2 = x + size, y2 = y + size;
+                const h = height;
+                const pulse = Math.sin(time * 4) * 0.2 + 1;
+                const color = `hsl(30, 60%, ${30 + 20 * pulse}%)`;
+
+                const cx = (x1 + x2) / 2;
+                const cy = (y1 + y2) / 2;
+                
+                // 绘制出口门框（无垂直光束）
+                this.ctx.strokeStyle = color;
+                this.ctx.lineWidth = 2;
+                
+                // 门框 - 简单绘制所有边，依靠画家算法
+                const v = {
+                    flb: {x:x1, y:y1, z:0}, frb: {x:x2, y:y1, z:0},
+                    frt: {x:x2, y:y1, z:h}, flt: {x:x1, y:y1, z:h},
+                    blb: {x:x1, y:y2, z:0}, brb: {x:x2, y:y2, z:0},
+                    brt: {x:x2, y:y2, z:h}, blt: {x:x1, y:y2, z:h}
+                };
+                
+                // 绘制所有边
+                const edges = [
+                    [v.flb, v.frb], [v.frb, v.frt], [v.frt, v.flt], [v.flt, v.flb], // 前面
+                    [v.blb, v.brb], [v.brb, v.brt], [v.brt, v.blt], [v.blt, v.blb], // 后面
+                    [v.flb, v.blb], [v.frb, v.brb], [v.frt, v.brt], [v.flt, v.blt]  // 垂直边
+                ];
+                
+                this.ctx.strokeStyle = color;
+                this.ctx.lineWidth = 2;
+                for (const [e1, e2] of edges) {
+                    this.drawLine3D(e1.x, e1.y, e1.z, e2.x, e2.y, e2.z);
+                }
+            }
+
+            render(time) {
+                // 清空画布（浅米色背景）
+                this.ctx.fillStyle = '#f5f5dc';
+                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+                if (this.state === 'playing' && this.maze) {
+                    // 绘制 subtle 纹理效果
+                    this.ctx.fillStyle = 'rgba(139, 69, 19, 0.03)';
+                    for (let i = 0; i < this.canvas.height; i += 4) {
+                        this.ctx.fillRect(0, i, this.canvas.width, 1);
+                    }
+
+                    // 只绘制视野范围内的墙（简单的距离裁剪）
+                    const viewDist = 20;
+                    const px = this.player.x;
+                    const py = this.player.y;
+                    const cellSize = this.cellSize;
+                    
+                    // 1. 先绘制地面网格（最远）- 限制范围避免奇怪的线条
+                    this.ctx.globalAlpha = 0.3;
+                    // 只在玩家附近绘制网格
+                    const gridRange = 8;
+                    const gridSpacing = 2;
+                    const z = 0.01; // 稍微高于0避免z-fighting
+                    for (let i = -gridRange; i <= gridRange; i++) {
+                        // 平行于Y轴的线
+                        const gx1 = Math.floor(px / gridSpacing) * gridSpacing + i * gridSpacing;
+                        const gy1 = Math.floor(py / gridSpacing) * gridSpacing - gridRange * gridSpacing;
+                        const gy2 = Math.floor(py / gridSpacing) * gridSpacing + gridRange * gridSpacing;
+                        this.drawLine3D(gx1, gy1, z, gx1, gy2, z, '#d2b48c', 0.5);
+                        
+                        // 平行于X轴的线
+                        const gy3 = Math.floor(py / gridSpacing) * gridSpacing + i * gridSpacing;
+                        const gx2a = Math.floor(px / gridSpacing) * gridSpacing - gridRange * gridSpacing;
+                        const gx2b = Math.floor(px / gridSpacing) * gridSpacing + gridRange * gridSpacing;
+                        this.drawLine3D(gx2a, gy3, z, gx2b, gy3, z, '#d2b48c', 0.5);
+                    }
+                    this.ctx.globalAlpha = 1;
+                    
+                    // 2. 收集要绘制的墙
+                    const walls = [];
+                    
+                    for (let y = 0; y < this.maze.height; y++) {
+                        for (let x = 0; x < this.maze.width; x++) {
+                            if (this.maze.grid[y][x] === 1) {
+                                // 计算墙中心到玩家的距离
+                                const wx = x * cellSize + cellSize/2;
+                                const wy = y * cellSize + cellSize/2;
+                                const dx = wx - px;
+                                const dy = wy - py;
+                                const dist = Math.sqrt(dx*dx + dy*dy);
+                                
+                                if (dist < viewDist) {
+                                    walls.push({x: x * cellSize, y: y * cellSize, dist: dist, wx, wy});
+                                }
+                            }
+                        }
+                    }
+
+                    // 3. 按距离从远到近排序（画家算法）- 使用稳定排序
+                    walls.sort((a, b) => {
+                        const diff = b.dist - a.dist;
+                        if (Math.abs(diff) < 0.001) {
+                            // 距离相同时，按坐标排序保证确定性
+                            return (a.wx + a.wy) - (b.wx + b.wy);
+                        }
+                        return diff;
+                    });
+
+                    // 4. 绘制所有墙（从远到近，这样近处的实心墙会遮挡远处的墙）
+                    for (const wall of walls) {
+                        const gridX = Math.floor(wall.x / cellSize);
+                        const gridY = Math.floor(wall.y / cellSize);
+                        this.drawWall(wall.x, wall.y, cellSize, this.wallHeight, gridX, gridY);
+                    }
+
+                    // 5. 最后绘制出口（最近，这样它会被正确遮挡或显示）
+                    if (this.exit) {
+                        this.drawExit(
+                            this.exit.x * cellSize, 
+                            this.exit.y * cellSize, 
+                            cellSize, this.wallHeight, 
+                            time / 1000
+                        );
+                    }
+                    
+                    // 6. 绘制小地图
+                    this.renderMinimap();
+                }
+            }
+
+            loop() {
+                const now = performance.now();
+                if (!this.lastTime) this.lastTime = now;
+                const dt = Math.min((now - this.lastTime) / 1000, 0.1);
+                this.lastTime = now;
+
+                this.update(dt);
+                this.render(now);
+
+                requestAnimationFrame(() => this.loop());
+            }
+        }
+
+        // 启动游戏
+        const game = new Game();
+    </script>
+</body>
+</html>
