@@ -554,7 +554,9 @@
                 this.fov = Math.PI / 3; // 60度视野
                 this.near = 0.1;  // 近裁剪面，防止贴墙透视
                 this.far = 100;
-                
+                // 预计算投影比例（避免每帧重复计算）
+                this.projectionScale = (this.canvas.height / 2) / Math.tan(this.fov / 2);
+
                 // 出口
                 this.exit = null;
                 this.currentLevel = 1;
@@ -655,6 +657,8 @@
                 this.canvas.width = window.innerWidth;
                 this.canvas.height = window.innerHeight;
                 this.aspect = this.canvas.width / this.canvas.height;
+                // 窗口大小改变时更新预计算的投影比例
+                this.projectionScale = (this.canvas.height / 2) / Math.tan(this.fov / 2);
             }
 
             setupEvents() {
@@ -1021,7 +1025,7 @@
                 const finalZ = -y_before * sp + camZ * cp; // 深度（必须为正）
                 
                 // 4. 透视投影 - 使用实际深度
-                const scale = (this.canvas.height / 2) / Math.tan(this.fov / 2);
+                const scale = this.projectionScale;
                 
                 // 返回相机空间坐标，用于后续裁剪
                 return {
@@ -1052,7 +1056,7 @@
                 
                 // 需要裁剪 - 一个在前一个在后
                 const t = (near - p1.camZ) / (p2.camZ - p1.camZ);
-                const scale = (this.canvas.height / 2) / Math.tan(this.fov / 2);
+                const scale = this.projectionScale;
                 
                 // 计算裁剪点
                 const clipCamX = p1.camX + t * (p2.camX - p1.camX);
@@ -1417,7 +1421,7 @@
                 const t = (near - p1.camZ) / (p2.camZ - p1.camZ);
                 if (t < 0 || t > 1) return null;
                 
-                const scale = (this.canvas.height / 2) / Math.tan(this.fov / 2);
+                const scale = this.projectionScale;
                 
                 const camX = p1.camX + t * (p2.camX - p1.camX);
                 const camY = p1.camY + t * (p2.camY - p1.camY);
