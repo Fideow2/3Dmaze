@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D 线框迷宫</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <div id="ui">
+        <div id="menu">
+            <h1>3D 线框迷宫</h1>
+            <div id="levelSelect">
+                <div class="level-grid" id="levelGrid"></div>
+                <div class="pagination">
+                    <button class="page-btn" id="prevPage">◀ 上一页</button>
+                    <span class="page-info" id="pageInfo">第 1 页</span>
+                    <button class="page-btn" id="nextPage">下一页 ▶</button>
+                </div>
+            </div>
+            <button class="level-btn" id="exportBtn">📥 导出当前地图</button>
+            <div id="instructions">
+                <p>WASD - 移动</p>
+                <p>鼠标 - 控制视角（可上下左右）</p>
+                <p>ESC - 释放鼠标/返回菜单</p>
+                <p>找到绿色出口即可过关</p>
+            </div>
+        </div>
+        <div id="hud">
+            <div>位置: <span id="pos">0, 0</span></div>
+            <div>找到出口!</div>
+        </div>
+        <div id="crosshair"></div>
+        <div id="minimapContainer">
+            <canvas id="minimapCanvas" width="120" height="120"></canvas>
+        </div>
+        <div id="winMessage">
+            <div>🎉 过关! 🎉</div>
+            <button class="level-btn" id="returnToMenu" style="margin-top: 20px;">返回菜单</button>
+        </div>
+    </div>
+
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>
