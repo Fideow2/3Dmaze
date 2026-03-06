@@ -276,6 +276,20 @@
             }
         }
 
+        // ==================== 数学工具函数 ====================
+        const MathUtils = {
+            // 距离平方（避免 sqrt）
+            distSq2D(x1, y1, x2, y2) {
+                const dx = x1 - x2, dy = y1 - y2;
+                return dx * dx + dy * dy;
+            },
+
+            // 点积 2D
+            dot2D(ax, ay, bx, by) {
+                return ax * bx + ay * by;
+            }
+        };
+
         // ==================== 带种子的随机数生成器 ====================
         class SeededRandom {
             constructor(seed) {
@@ -1002,40 +1016,32 @@
                 ctx.fill();
             }
 
-            // 将3D点投影到屏幕
+            // 将3D点投影到屏幕（使用预计算的三角函数缓存）
             project(x, y, z) {
-                // 1. 计算点相对于相机的偏移
-                const dx = x - this.player.x;
-                const dy = y - this.player.y;
-                const dz = z - this.player.z;
+                const cache = this.frameCache;
 
-                // 2. 应用yaw旋转（水平旋转，绕垂直轴）
-                const cy = Math.cos(this.player.yaw);
-                const sy = Math.sin(this.player.yaw);
-                
-                const camX = dx * cy + dy * sy;       // 相机空间的X（右为正）
-                const camZ = dx * sy - dy * cy;       // 相机空间的Z（前为正，深度）
-                
-                // 3. 处理高度和pitch（垂直旋转，绕X轴）
-                const cp = Math.cos(this.player.pitch);
-                const sp = Math.sin(this.player.pitch);
-                
+                // 1. 计算点相对于相机的偏移
+                const dx = x - cache.px;
+                const dy = y - cache.py;
+                const dz = z - cache.pz;
+
+                // 2. 应用yaw旋转（水平旋转，绕垂直轴）- 使用缓存的sin/cos
+                const camX = dx * cache.cosYaw + dy * cache.sinYaw;
+                const camZ = dx * cache.sinYaw - dy * cache.cosYaw;
+
+                // 3. 处理高度和pitch（垂直旋转，绕X轴）- 使用缓存的sin/cos
                 const y_before = -dz;
-                const camY = y_before * cp + camZ * sp;    // 屏幕垂直方向（向下为正）
-                const finalZ = -y_before * sp + camZ * cp; // 深度（必须为正）
-                
-                // 4. 透视投影 - 使用实际深度
-                const scale = this.projectionScale;
-                
-                // 返回相机空间坐标，用于后续裁剪
+                const camY = y_before * cache.cosPitch + camZ * cache.sinPitch;
+                const finalZ = -y_before * cache.sinPitch + camZ * cache.cosPitch;
+
+                // 4. 透视投影 - 使用缓存的scale和canvas尺寸
                 return {
-                    x: (camX / finalZ) * scale + this.canvas.width / 2,
-                    y: (camY / finalZ) * scale + this.canvas.height / 2,
+                    x: (camX / finalZ) * cache.scale + cache.halfW,
+                    y: (camY / finalZ) * cache.scale + cache.halfH,
                     depth: finalZ,
                     camX: camX,
                     camY: camY,
                     camZ: finalZ,
-                    // 点在相机前面才算可见
                     visible: finalZ > this.near
                 };
             }
@@ -1474,95 +1480,130 @@
                 }
             }
 
-            render(time) {
+            // ==================== 渲染辅助方法 ====================
+
+            _updateFrameCache() {
+                const p = this.player;
+                this.frameCache = {
+                    cosYaw: Math.cos(p.yaw),
+                    sinYaw: Math.sin(p.yaw),
+                    cosPitch: Math.cos(p.pitch),
+                    sinPitch: Math.sin(p.pitch),
+                    scale: this.projectionScale,
+                    halfW: this.canvas.width / 2,
+                    halfH: this.canvas.height / 2,
+                    px: p.x,
+                    py: p.y,
+                    pz: p.z
+                };
+            }
+
+            _clearCanvas() {
                 // 清空画布（浅米色背景）
                 this.ctx.fillStyle = '#f5f5dc';
                 this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
-                if (this.state === 'playing' && this.maze) {
-                    // 绘制 subtle 纹理效果
-                    this.ctx.fillStyle = 'rgba(139, 69, 19, 0.03)';
-                    for (let i = 0; i < this.canvas.height; i += 4) {
-                        this.ctx.fillRect(0, i, this.canvas.width, 1);
-                    }
+                // 绘制 subtle 纹理效果
+                this.ctx.fillStyle = 'rgba(139, 69, 19, 0.03)';
+                for (let i = 0; i < this.canvas.height; i += 4) {
+                    this.ctx.fillRect(0, i, this.canvas.width, 1);
+                }
+            }
 
-                    // 只绘制视野范围内的墙（简单的距离裁剪）
-                    const viewDist = 20;
-                    const px = this.player.x;
-                    const py = this.player.y;
-                    const cellSize = this.cellSize;
-                    
-                    // 1. 先绘制地面网格（最远）- 限制范围避免奇怪的线条
-                    this.ctx.globalAlpha = 0.3;
-                    // 只在玩家附近绘制网格
-                    const gridRange = 8;
-                    const gridSpacing = 2;
-                    const z = 0.01; // 稍微高于0避免z-fighting
-                    for (let i = -gridRange; i <= gridRange; i++) {
-                        // 平行于Y轴的线
-                        const gx1 = Math.floor(px / gridSpacing) * gridSpacing + i * gridSpacing;
-                        const gy1 = Math.floor(py / gridSpacing) * gridSpacing - gridRange * gridSpacing;
-                        const gy2 = Math.floor(py / gridSpacing) * gridSpacing + gridRange * gridSpacing;
-                        this.drawLine3D(gx1, gy1, z, gx1, gy2, z, '#d2b48c', 0.5);
-                        
-                        // 平行于X轴的线
-                        const gy3 = Math.floor(py / gridSpacing) * gridSpacing + i * gridSpacing;
-                        const gx2a = Math.floor(px / gridSpacing) * gridSpacing - gridRange * gridSpacing;
-                        const gx2b = Math.floor(px / gridSpacing) * gridSpacing + gridRange * gridSpacing;
-                        this.drawLine3D(gx2a, gy3, z, gx2b, gy3, z, '#d2b48c', 0.5);
-                    }
-                    this.ctx.globalAlpha = 1;
-                    
-                    // 2. 收集要绘制的墙
-                    const walls = [];
-                    
-                    for (let y = 0; y < this.maze.height; y++) {
-                        for (let x = 0; x < this.maze.width; x++) {
-                            if (this.maze.grid[y][x] === 1) {
-                                // 计算墙中心到玩家的距离
-                                const wx = x * cellSize + cellSize/2;
-                                const wy = y * cellSize + cellSize/2;
-                                const dx = wx - px;
-                                const dy = wy - py;
-                                const dist = Math.sqrt(dx*dx + dy*dy);
-                                
-                                if (dist < viewDist) {
-                                    walls.push({x: x * cellSize, y: y * cellSize, dist: dist, wx, wy});
-                                }
+            _drawGroundGrid() {
+                const px = this.player.x;
+                const py = this.player.y;
+                const gridRange = 8;
+                const gridSpacing = 2;
+                const z = 0.01;
+
+                this.ctx.globalAlpha = 0.3;
+                const baseGX = Math.floor(px / gridSpacing) * gridSpacing;
+                const baseGY = Math.floor(py / gridSpacing) * gridSpacing;
+
+                for (let i = -gridRange; i <= gridRange; i++) {
+                    const gx1 = baseGX + i * gridSpacing;
+                    const gy1 = baseGY - gridRange * gridSpacing;
+                    const gy2 = baseGY + gridRange * gridSpacing;
+                    this.drawLine3D(gx1, gy1, z, gx1, gy2, z, '#d2b48c', 0.5);
+
+                    const gy3 = baseGY + i * gridSpacing;
+                    const gx2a = baseGX - gridRange * gridSpacing;
+                    const gx2b = baseGX + gridRange * gridSpacing;
+                    this.drawLine3D(gx2a, gy3, z, gx2b, gy3, z, '#d2b48c', 0.5);
+                }
+                this.ctx.globalAlpha = 1;
+            }
+
+            _collectAndDrawWalls(time) {
+                const viewDist = 20;
+                const viewDistSq = viewDist * viewDist;
+                const px = this.player.x;
+                const py = this.player.y;
+                const cellSize = this.cellSize;
+
+                // 计算玩家所在网格位置
+                const playerGridX = Math.floor(px / cellSize);
+                const playerGridY = Math.floor(py / cellSize);
+                const range = Math.ceil(viewDist / cellSize);
+
+                const walls = [];
+
+                // 只遍历玩家周围一定范围的网格
+                const minY = Math.max(0, playerGridY - range);
+                const maxY = Math.min(this.maze.height, playerGridY + range);
+                const minX = Math.max(0, playerGridX - range);
+                const maxX = Math.min(this.maze.width, playerGridX + range);
+
+                for (let y = minY; y < maxY; y++) {
+                    for (let x = minX; x < maxX; x++) {
+                        if (this.maze.grid[y][x] === 1) {
+                            const wx = x * cellSize + cellSize / 2;
+                            const wy = y * cellSize + cellSize / 2;
+                            const distSq = MathUtils.distSq2D(wx, wy, px, py);
+
+                            if (distSq < viewDistSq) {
+                                walls.push({
+                                    x: x * cellSize,
+                                    y: y * cellSize,
+                                    distSq: distSq,
+                                    gridX: x,
+                                    gridY: y
+                                });
                             }
                         }
                     }
-
-                    // 3. 按距离从远到近排序（画家算法）- 使用稳定排序
-                    walls.sort((a, b) => {
-                        const diff = b.dist - a.dist;
-                        if (Math.abs(diff) < 0.001) {
-                            // 距离相同时，按坐标排序保证确定性
-                            return (a.wx + a.wy) - (b.wx + b.wy);
-                        }
-                        return diff;
-                    });
-
-                    // 4. 绘制所有墙（从远到近，这样近处的实心墙会遮挡远处的墙）
-                    for (const wall of walls) {
-                        const gridX = Math.floor(wall.x / cellSize);
-                        const gridY = Math.floor(wall.y / cellSize);
-                        this.drawWall(wall.x, wall.y, cellSize, this.wallHeight, gridX, gridY);
-                    }
-
-                    // 5. 最后绘制出口（最近，这样它会被正确遮挡或显示）
-                    if (this.exit) {
-                        this.drawExit(
-                            this.exit.x * cellSize, 
-                            this.exit.y * cellSize, 
-                            cellSize, this.wallHeight, 
-                            time / 1000
-                        );
-                    }
-                    
-                    // 6. 绘制小地图
-                    this.renderMinimap();
                 }
+
+                // 按距离从远到近排序（简化为距离平方排序）
+                walls.sort((a, b) => b.distSq - a.distSq);
+
+                // 绘制所有墙
+                for (const wall of walls) {
+                    this.drawWall(wall.x, wall.y, cellSize, this.wallHeight, wall.gridX, wall.gridY);
+                }
+            }
+
+            _drawExit(time) {
+                if (!this.exit) return;
+                const cellSize = this.cellSize;
+                this.drawExit(
+                    this.exit.x * cellSize,
+                    this.exit.y * cellSize,
+                    cellSize, this.wallHeight,
+                    time / 1000
+                );
+            }
+
+            render(time) {
+                this._clearCanvas();
+                if (this.state !== 'playing' || !this.maze) return;
+
+                this._updateFrameCache();
+                this._drawGroundGrid();
+                this._collectAndDrawWalls(time);
+                this._drawExit(time);
+                this.renderMinimap();
             }
 
             loop() {
